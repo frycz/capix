@@ -112,6 +112,10 @@ Both sets are plain frozensets — extend them as new models ship.
   keeps long responses from hitting request timeouts.
 - **Refusals raise `RefusalError`** rather than returning empty text.
 
+## Releasing
+
+Published to PyPI from the command line with twine — see [RELEASING.md](RELEASING.md).
+
 ## Unofficial
 
 `capix` is a personal, unofficial client. It is not affiliated with or endorsed
