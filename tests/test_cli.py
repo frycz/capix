@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import os
 
 import pytest
 
@@ -93,3 +94,38 @@ class TestMain:
         fake_ask(raises=exc)
         assert cli.main(["hi"]) == code
         assert "error:" in capsys.readouterr().err
+
+
+class TestDotenvDiscovery:
+    """Regression: `.env` must be found relative to the user's cwd.
+
+    python-dotenv's find_dotenv defaults to searching upward from the calling
+    *module's* directory. For an installed package that is site-packages, so a
+    bare load_dotenv() silently finds nothing when the CLI is run from a
+    project directory — which is the only way it is ever run.
+    """
+
+    def test_finds_dotenv_in_cwd(self, tmp_path, monkeypatch):
+        (tmp_path / ".env").write_text("ANTHROPIC_MODEL=from-dotenv\n")
+        monkeypatch.chdir(tmp_path)
+        assert cli.load_env_from_cwd() == str(tmp_path / ".env")
+        assert os.environ["ANTHROPIC_MODEL"] == "from-dotenv"
+
+    def test_finds_dotenv_in_a_parent_directory(self, tmp_path, monkeypatch):
+        (tmp_path / ".env").write_text("ANTHROPIC_MODEL=from-parent\n")
+        nested = tmp_path / "a" / "b"
+        nested.mkdir(parents=True)
+        monkeypatch.chdir(nested)
+        cli.load_env_from_cwd()
+        assert os.environ["ANTHROPIC_MODEL"] == "from-parent"
+
+    def test_returns_none_when_absent(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        assert cli.load_env_from_cwd() is None
+
+    def test_exported_variable_wins_over_dotenv(self, tmp_path, monkeypatch):
+        (tmp_path / ".env").write_text("ANTHROPIC_MODEL=from-dotenv\n")
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("ANTHROPIC_MODEL", "from-shell")
+        cli.load_env_from_cwd()
+        assert os.environ["ANTHROPIC_MODEL"] == "from-shell"

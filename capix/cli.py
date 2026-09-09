@@ -6,7 +6,7 @@ import argparse
 import sys
 
 import anthropic
-from dotenv import load_dotenv
+from dotenv import find_dotenv, load_dotenv
 
 from .client import (
     DEFAULT_MAX_TOKENS,
@@ -57,6 +57,23 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def load_env_from_cwd() -> str | None:
+    """Load a `.env` found by walking up from the working directory.
+
+    `usecwd=True` is essential. Without it python-dotenv searches upwards from
+    the directory holding *this module*, which for an installed package is
+    somewhere in site-packages — so a `.env` sitting next to the user in their
+    project would never be found.
+
+    Returns the path loaded, or None if there was no `.env` to load.
+    """
+    path = find_dotenv(usecwd=True)
+    if not path:
+        return None
+    load_dotenv(path)
+    return path
+
+
 def read_prompt(words: list[str]) -> str:
     """Prompt comes from argv, or from stdin when argv is empty or is '-'."""
     joined = " ".join(words).strip()
@@ -71,7 +88,7 @@ def main(argv: list[str] | None = None) -> int:
     # Loading `.env` is a CLI convenience, never a library side effect. It runs
     # before the parser is built because --model's help shows the resolved
     # default. load_dotenv does not overwrite already-exported variables.
-    load_dotenv()
+    load_env_from_cwd()
     args = build_parser().parse_args(argv)
 
     prompt = read_prompt(args.prompt)
