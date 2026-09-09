@@ -1,0 +1,14 @@
+# Secrets — never commit
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# uv-managed environment — recreate it with `uv sync`.
+# uv.lock is committed on purpose, so it is not listed here.
+.venv/
+venv/
+dist/
+build/

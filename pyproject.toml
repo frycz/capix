@@ -1,0 +1,53 @@
+[project]
+name = "capix"
+version = "0.1.0"
+description = "A thin, stateless wrapper and CLI for the Claude Messages API."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Adam Sawicki" }]
+keywords = ["claude", "anthropic", "llm", "cli", "api"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Utilities",
+]
+dependencies = [
+    # 1.4 is the version this is developed and tested against. The floor is
+    # deliberately high: adaptive thinking, output_config.effort and
+    # server-side fallbacks are all recent additions to the SDK.
+    "anthropic>=1.4,<2",
+    "python-dotenv>=1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/frycz/capix"
+Repository = "https://github.com/frycz/capix"
+Issues = "https://github.com/frycz/capix/issues"
+
+[project.scripts]
+capix = "capix.cli:main"
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["capix"]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.uv]
+package = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
