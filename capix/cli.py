@@ -8,6 +8,7 @@ import sys
 import anthropic
 from dotenv import find_dotenv, load_dotenv
 
+from . import __version__
 from .client import (
     DEFAULT_MAX_TOKENS,
     MissingCredentialsError,
@@ -28,6 +29,13 @@ def build_parser() -> argparse.ArgumentParser:
         "prompt",
         nargs="*",
         help="The prompt. If omitted, it is read from stdin.",
+    )
+    parser.add_argument(
+        "-v",
+        "--version",
+        action="version",
+        version=f"capix {__version__}",
+        help="Print the installed version and exit.",
     )
     parser.add_argument("-s", "--system", help="Optional system prompt.")
     parser.add_argument(

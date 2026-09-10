@@ -4,9 +4,16 @@ from __future__ import annotations
 
 import io
 import os
+import pathlib
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10
+    tomllib = None
 
 import pytest
 
+import capix
 import capix.cli as cli
 from capix.client import MissingCredentialsError, RefusalError
 
@@ -129,3 +136,27 @@ class TestDotenvDiscovery:
         monkeypatch.setenv("ANTHROPIC_MODEL", "from-shell")
         cli.load_env_from_cwd()
         assert os.environ["ANTHROPIC_MODEL"] == "from-shell"
+
+
+class TestVersionFlag:
+    """--version reads installed metadata, so it can never drift from the
+    version in pyproject.toml the way a hardcoded string would."""
+
+    @pytest.mark.parametrize("flag", ["-v", "--version"])
+    def test_prints_version_and_exits_zero(self, capsys, flag):
+        with pytest.raises(SystemExit) as exc:
+            cli.main([flag])
+        assert exc.value.code == 0
+        out = capsys.readouterr().out
+        assert out.startswith("capix ")
+        assert out.split()[1] == capix.__version__
+
+    def test_matches_pyproject(self):
+        """Guards against metadata going stale in an editable install."""
+        if tomllib is None:
+            pytest.skip("tomllib requires Python 3.11+")
+        pyproject = pathlib.Path(__file__).parent.parent / "pyproject.toml"
+        if not pyproject.exists():  # running against an installed copy
+            pytest.skip("no source checkout")
+        declared = tomllib.loads(pyproject.read_text())["project"]["version"]
+        assert capix.__version__ == declared

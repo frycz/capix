@@ -1,6 +1,6 @@
 [project]
 name = "capix"
-version = "0.1.1"
+version = "0.1.2"
 description = "A thin, stateless wrapper and CLI for the Claude Messages API."
 readme = "README.md"
 requires-python = ">=3.10"

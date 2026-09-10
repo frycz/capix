@@ -53,6 +53,7 @@ Output streams as it arrives. Options:
 
 | Flag | Meaning |
 | --- | --- |
+| `-v, --version` | Print the installed version and exit |
 | `-s, --system` | System prompt |
 | `-m, --model` | Model id (default: `ANTHROPIC_MODEL`, else `claude-haiku-4-5`) |
 | `-t, --max-tokens` | Output ceiling (default 16000) |
