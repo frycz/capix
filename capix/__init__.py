@@ -11,6 +11,7 @@ from .client import (
     RefusalError,
     ask,
     ask_message,
+    build_params,
     default_model,
     get_client,
 )
@@ -24,6 +25,7 @@ __all__ = [
     "__version__",
     "ask",
     "ask_message",
+    "build_params",
     "get_client",
     "default_model",
     "RefusalError",

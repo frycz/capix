@@ -82,53 +82,22 @@ def get_client() -> anthropic.Anthropic:
     return _client
 
 
-def ask(
+def build_params(
     prompt: str,
     *,
     system: str | None = None,
     model: str | None = None,
     max_tokens: int = DEFAULT_MAX_TOKENS,
     effort: str | None = None,
-    on_text: Callable[[str], None] | None = None,
-) -> str:
-    """Send one context-free prompt and return Claude's text response.
+) -> dict[str, Any]:
+    """Build the exact request body `ask` would send, without sending it.
 
-    Args:
-        prompt: The user message. This is the entire conversation.
-        system: Optional system prompt.
-        model: Model id. Defaults to ANTHROPIC_MODEL, else DEFAULT_MODEL.
-        max_tokens: Hard ceiling on thinking + response tokens.
-        effort: One of "low", "medium", "high", "xhigh", "max". Only accepted
-            by the models in THINKING_MODELS. Omit for the API default.
-        on_text: Called with each text chunk as it streams in. Use it to print
-            output live; leave it None to just wait for the full answer.
+    Separated out so callers (and --verbose) can inspect the real parameters
+    rather than a reconstruction that might drift from what is actually sent.
 
     Raises:
         ValueError: if `effort` is set on a model that does not support it.
-        MissingCredentialsError: if no API key could be resolved.
-        RefusalError: if Claude declined the request.
     """
-    message = ask_message(
-        prompt,
-        system=system,
-        model=model,
-        max_tokens=max_tokens,
-        effort=effort,
-        on_text=on_text,
-    )
-    return "".join(block.text for block in message.content if block.type == "text")
-
-
-def ask_message(
-    prompt: str,
-    *,
-    system: str | None = None,
-    model: str | None = None,
-    max_tokens: int = DEFAULT_MAX_TOKENS,
-    effort: str | None = None,
-    on_text: Callable[[str], None] | None = None,
-):
-    """Same as `ask`, but returns the full message object (usage, stop_reason, ...)."""
     model = model or default_model()
 
     params: dict[str, Any] = {
@@ -153,6 +122,75 @@ def ask_message(
         params["betas"] = [FALLBACK_BETA]
         params["fallbacks"] = "default"
 
+    return params
+
+
+def ask(
+    prompt: str,
+    *,
+    system: str | None = None,
+    model: str | None = None,
+    max_tokens: int = DEFAULT_MAX_TOKENS,
+    effort: str | None = None,
+    on_text: Callable[[str], None] | None = None,
+    on_request: Callable[[dict[str, Any]], None] | None = None,
+    on_response: Callable[[Any], None] | None = None,
+) -> str:
+    """Send one context-free prompt and return Claude's text response.
+
+    Args:
+        prompt: The user message. This is the entire conversation.
+        system: Optional system prompt.
+        model: Model id. Defaults to ANTHROPIC_MODEL, else DEFAULT_MODEL.
+        max_tokens: Hard ceiling on thinking + response tokens.
+        effort: One of "low", "medium", "high", "xhigh", "max". Only accepted
+            by the models in THINKING_MODELS. Omit for the API default.
+        on_text: Called with each text chunk as it streams in. Use it to print
+            output live; leave it None to just wait for the full answer.
+        on_request: Called with the request params immediately before sending.
+        on_response: Called with the final message object once it arrives.
+
+    Raises:
+        ValueError: if `effort` is set on a model that does not support it.
+        MissingCredentialsError: if no API key could be resolved.
+        RefusalError: if Claude declined the request.
+    """
+    message = ask_message(
+        prompt,
+        system=system,
+        model=model,
+        max_tokens=max_tokens,
+        effort=effort,
+        on_text=on_text,
+        on_request=on_request,
+        on_response=on_response,
+    )
+    return "".join(block.text for block in message.content if block.type == "text")
+
+
+def ask_message(
+    prompt: str,
+    *,
+    system: str | None = None,
+    model: str | None = None,
+    max_tokens: int = DEFAULT_MAX_TOKENS,
+    effort: str | None = None,
+    on_text: Callable[[str], None] | None = None,
+    on_request: Callable[[dict[str, Any]], None] | None = None,
+    on_response: Callable[[Any], None] | None = None,
+):
+    """Same as `ask`, but returns the full message object (usage, stop_reason, ...)."""
+    params = build_params(
+        prompt,
+        system=system,
+        model=model,
+        max_tokens=max_tokens,
+        effort=effort,
+    )
+
+    if on_request is not None:
+        on_request(params)
+
     # Always stream: it keeps long responses from hitting request timeouts,
     # whether or not the caller wants the chunks.
     try:
@@ -167,6 +205,9 @@ def ask_message(
         if "Could not resolve authentication method" not in str(exc):
             raise
         raise MissingCredentialsError() from None
+
+    if on_response is not None:
+        on_response(message)
 
     if message.stop_reason == "refusal":
         details = message.stop_details

@@ -17,11 +17,23 @@ class FakeBlock:
         self.text = text
 
 
+class FakeUsage:
+    """Stands in for the SDK's usage model, which exposes to_dict()."""
+
+    def to_dict(self) -> dict:
+        return {"input_tokens": 9, "output_tokens": 3}
+
+
 class FakeMessage:
     def __init__(self, text: str = "hi", stop_reason: str = "end_turn") -> None:
         self.content = [FakeBlock(text)]
         self.stop_reason = stop_reason
         self.stop_details = None
+        # The server echoes the dated id, not the alias that was requested —
+        # that difference is the whole point of logging it.
+        self.id = "msg_fake"
+        self.model = "claude-haiku-4-5-20251001"
+        self.usage = FakeUsage()
 
 
 class FakeStream:

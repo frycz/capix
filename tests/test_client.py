@@ -14,6 +14,7 @@ from capix import (
     RefusalError,
     ask,
     ask_message,
+    build_params,
     default_model,
 )
 from capix.client import FALLBACK_BETA
@@ -143,3 +144,41 @@ class TestOutput:
         fake_client(stop_reason="refusal")
         with pytest.raises(RefusalError):
             ask("hi")
+
+
+class TestInspectionHooks:
+    """`--verbose` is only trustworthy if it reports the real request, so the
+    hook must receive the same dict that reaches the SDK — not a copy built
+    alongside it."""
+
+    def test_build_params_matches_what_is_sent(self, fake_client):
+        fake = fake_client()
+        ask("hi", system="be terse", model=THINKING, max_tokens=99, effort="low")
+        assert fake.params == build_params(
+            "hi", system="be terse", model=THINKING, max_tokens=99, effort="low"
+        )
+
+    def test_on_request_receives_the_sent_params(self, fake_client):
+        fake = fake_client()
+        seen: list[dict] = []
+        ask("hi", model=FALLBACK, on_request=seen.append)
+        assert seen == [fake.params]
+
+    def test_on_request_fires_before_the_call(self, fake_client):
+        """So a verbose log shows the request even when the call then fails."""
+        fake = fake_client()
+        params_at_hook_time: list[dict] = []
+        ask("hi", on_request=lambda _: params_at_hook_time.append(dict(fake.params)))
+        assert params_at_hook_time == [{}]  # nothing sent yet
+
+    def test_on_response_receives_the_message(self, fake_client):
+        fake_client()
+        seen: list = []
+        ask("hi", on_response=seen.append)
+        assert [m.model for m in seen] == ["claude-haiku-4-5-20251001"]
+
+    def test_build_params_rejects_effort_before_any_request(self, fake_client):
+        fake = fake_client()
+        with pytest.raises(ValueError):
+            ask("hi", model=NON_THINKING, effort="low", on_request=lambda p: None)
+        assert fake.params == {}

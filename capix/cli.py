@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import json
+import os
 import sys
+from typing import Any
 
 import anthropic
 from dotenv import find_dotenv, load_dotenv
@@ -62,6 +65,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Wait for the full response instead of printing it as it arrives.",
     )
+    parser.add_argument(
+        "-V",
+        "--verbose",
+        action="store_true",
+        help="Print the request params and response metadata to stderr.",
+    )
     return parser
 
 
@@ -82,6 +91,55 @@ def load_env_from_cwd() -> str | None:
     return path
 
 
+def log(line: str) -> None:
+    """Verbose output goes to stderr so stdout stays a clean, pipeable answer."""
+    print(f"capix: {line}", file=sys.stderr)
+
+
+def log_env(dotenv_path: str | None) -> None:
+    """Where the settings came from — the usual cause of a surprising model."""
+    log(f".env           {dotenv_path or '(none found)'}")
+    log(f"ANTHROPIC_MODEL {os.environ.get('ANTHROPIC_MODEL') or '(unset)'}")
+    log(f"ANTHROPIC_BASE_URL {os.environ.get('ANTHROPIC_BASE_URL') or '(default)'}")
+
+
+def log_request(params: dict[str, Any]) -> None:
+    """The exact body handed to the SDK, minus the API key it never contains."""
+    log("request ->")
+    print(json.dumps(params, indent=2, default=str), file=sys.stderr)
+
+
+def plain(value: Any) -> Any:
+    """Unwrap an SDK response model into something json.dumps can render.
+
+    Without this, nested objects like `usage` serialize to their repr — one
+    long unreadable line — because default=str stringifies the whole model.
+    """
+    if hasattr(value, "to_dict"):
+        return value.to_dict()
+    return value
+
+
+def log_response(message: Any) -> None:
+    """`model` here is authoritative: it is what the server actually ran.
+
+    Do not trust the model's own claim about its identity in the response text
+    — models have no reliable self-knowledge and will often name the wrong one.
+    """
+    # Leading newline: when streaming, the answer is sitting on stdout without
+    # a trailing newline at this point and the two would run together.
+    print(file=sys.stderr)
+    log("response <-")
+    meta = {
+        "id": getattr(message, "id", None),
+        "model": message.model,
+        "stop_reason": message.stop_reason,
+        "stop_details": plain(getattr(message, "stop_details", None)),
+        "usage": plain(getattr(message, "usage", None)),
+    }
+    print(json.dumps(meta, indent=2, default=str), file=sys.stderr)
+
+
 def read_prompt(words: list[str]) -> str:
     """Prompt comes from argv, or from stdin when argv is empty or is '-'."""
     joined = " ".join(words).strip()
@@ -96,13 +154,16 @@ def main(argv: list[str] | None = None) -> int:
     # Loading `.env` is a CLI convenience, never a library side effect. It runs
     # before the parser is built because --model's help shows the resolved
     # default. load_dotenv does not overwrite already-exported variables.
-    load_env_from_cwd()
+    dotenv_path = load_env_from_cwd()
     args = build_parser().parse_args(argv)
 
     prompt = read_prompt(args.prompt)
     if not prompt:
         print("error: no prompt given (pass one as an argument or pipe it on stdin)", file=sys.stderr)
         return 2
+
+    if args.verbose:
+        log_env(dotenv_path)
 
     def emit(chunk: str) -> None:
         print(chunk, end="", flush=True)
@@ -115,6 +176,8 @@ def main(argv: list[str] | None = None) -> int:
             max_tokens=args.max_tokens,
             effort=args.effort,
             on_text=None if args.no_stream else emit,
+            on_request=log_request if args.verbose else None,
+            on_response=log_response if args.verbose else None,
         )
     except ValueError as exc:  # e.g. --effort on a model that rejects it
         print(f"error: {exc}", file=sys.stderr)

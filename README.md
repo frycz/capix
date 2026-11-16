@@ -59,8 +59,30 @@ Output streams as it arrives. Options:
 | `-t, --max-tokens` | Output ceiling (default 16000) |
 | `-e, --effort` | `low` … `max`; only on models that support it (see below) |
 | `--no-stream` | Wait for the complete response, then print |
+| `-V, --verbose` | Print the request params and response metadata to stderr |
 
 `python -m capix "..."` works the same way.
+
+## Debugging what was actually sent
+
+`-V` prints where the settings came from, the exact request body handed to the
+SDK, and the response metadata. It all goes to stderr, so `capix -V "..." >
+answer.txt` still captures a clean answer.
+
+```sh
+capix -V "say hi"
+```
+
+The `model` field in the response block is authoritative — it is the model the
+server actually ran, resolved to a dated id (`claude-haiku-4-5-20251001`).
+
+Do not ask the model which model it is. Models have no reliable knowledge of
+their own identity: Haiku 4.5 asked "are you Sonnet, Opus, or Haiku?" answers
+"Sonnet". That is a guess from its training data, not a configuration problem,
+and it is the one thing `-V` exists to settle.
+
+For raw HTTP wire logging beyond this, set `ANTHROPIC_LOG=debug` — the
+Anthropic SDK reads it directly.
 
 ## Library
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import json
 import os
 import pathlib
 
@@ -16,6 +17,8 @@ import pytest
 import capix
 import capix.cli as cli
 from capix.client import MissingCredentialsError, RefusalError
+
+from conftest import FakeMessage  # tests/ is on sys.path, not a package
 
 
 @pytest.fixture
@@ -101,6 +104,48 @@ class TestMain:
         fake_ask(raises=exc)
         assert cli.main(["hi"]) == code
         assert "error:" in capsys.readouterr().err
+
+
+class TestVerbose:
+    """Verbose output must stay on stderr: the whole point of the tool is that
+    stdout is a clean answer you can pipe."""
+
+    def test_off_by_default(self, fake_ask):
+        recorded = fake_ask()
+        cli.main(["hi"])
+        assert recorded["on_request"] is None
+        assert recorded["on_response"] is None
+
+    def test_flag_installs_both_hooks(self, fake_ask):
+        recorded = fake_ask()
+        cli.main(["-V", "hi"])
+        assert recorded["on_request"] is cli.log_request
+        assert recorded["on_response"] is cli.log_response
+
+    def test_nothing_lands_on_stdout(self, fake_ask, capsys):
+        fake_ask(result="answer")
+        cli.main(["-V", "hi"])
+        captured = capsys.readouterr()
+        assert captured.out == "answer\n"
+        assert "ANTHROPIC_MODEL" in captured.err
+
+    def test_request_log_is_valid_json(self, capsys):
+        params = {"model": "claude-haiku-4-5", "max_tokens": 10}
+        cli.log_request(params)
+        body = capsys.readouterr().err.split("request ->", 1)[1]
+        assert json.loads(body) == params
+
+    def test_response_log_reports_the_served_model(self, capsys):
+        """The requested alias and the model that ran are different strings,
+        and only the latter answers "which model did I actually get"."""
+        cli.log_response(FakeMessage())
+        body = capsys.readouterr().err.split("response <-", 1)[1]
+        assert json.loads(body)["model"] == "claude-haiku-4-5-20251001"
+
+    def test_response_log_expands_nested_sdk_models(self, capsys):
+        cli.log_response(FakeMessage())
+        body = capsys.readouterr().err.split("response <-", 1)[1]
+        assert json.loads(body)["usage"] == {"input_tokens": 9, "output_tokens": 3}
 
 
 class TestDotenvDiscovery:
